@@ -1,3 +1,5 @@
+"use client";
+
 import { useUser } from "@clerk/nextjs";
 import { useConvexAuth, useMutation } from "convex/react";
 import { useEffect, useState } from "react";
@@ -11,13 +13,8 @@ export function useStoreUser() {
   const storeUser = useMutation(api.users.store);
 
   useEffect(() => {
-    // 1) Si no está logueado, no hacemos nada
     if (!isAuthenticated) return;
-
-    // 2) Si Clerk todavía no cargó el user, no hacemos nada
     if (!user) return;
-
-    // 3) Si ya lo guardamos, no lo vuelvas a guardar
     if (userId) return;
 
     async function createUser() {
@@ -25,7 +22,26 @@ export function useStoreUser() {
         user?.primaryEmailAddress?.emailAddress ||
         user?.emailAddresses?.[0]?.emailAddress;
 
-      // Si no hay email, no guardamos (evita "Anonymous" sin email)
       if (!email) return;
 
-      const
+      const name =
+        user?.fullName ||
+        user?.firstName ||
+        user?.username ||
+        "Anonymous";
+
+      const imageUrl = user?.imageUrl;
+
+      const id = await storeUser({ name, email, imageUrl });
+      setUserId(id);
+    }
+
+    createUser();
+    return () => setUserId(null);
+  }, [isAuthenticated, user, userId, storeUser]);
+
+  return {
+    isLoading: isLoading || (isAuthenticated && userId === null),
+    isAuthenticated: isAuthenticated && userId !== null,
+  };
+}
