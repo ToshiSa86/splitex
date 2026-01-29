@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 
-eexport const store = mutation({
+export const store = mutation({
   args: {
     name: v.optional(v.string()),
     email: v.optional(v.string()),
@@ -24,6 +24,12 @@ eexport const store = mutation({
     const nextName = args.name ?? identity.name ?? "Anonymous";
     const nextEmail = args.email ?? identity.email ?? undefined;
     const nextImageUrl = args.imageUrl ?? identity.pictureUrl ?? undefined;
+    
+    if (!nextEmail) {
+  throw new Error(
+    "Email is required. Please sign up/sign in with an email account."
+  );
+}
 
     if (user !== null) {
       const updates = {};
