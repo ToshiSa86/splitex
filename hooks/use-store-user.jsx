@@ -19,11 +19,29 @@ export function useStoreUser() {
     if (!isAuthenticated) {
       return;
     }
+
+     // NEW: wait until Clerk user is loaded
+  if (!user) {
+    return;
+  }
     // Store the user in the database.
     // Recall that `storeUser` gets the user information via the `auth`
     // object on the server. You don't need to pass anything manually here.
     async function createUser() {
-      const id = await storeUser();
+      const email =
+  user?.primaryEmailAddress?.emailAddress ||
+  user?.emailAddresses?.[0]?.emailAddress;
+
+const name =
+  user?.fullName ||
+  user?.firstName ||
+  user?.username ||
+  "Anonymous";
+
+const email = user?.primaryEmailAddress?.emailAddress;
+const imageUrl = user?.imageUrl;
+
+const id = await storeUser({ name, email, imageUrl });
       setUserId(id);
     }
     createUser();

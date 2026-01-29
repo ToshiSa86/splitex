@@ -10,44 +10,43 @@ export const store = mutation({
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Called storeUser without authentication present");
+    if (!identity) throw new Error("Not authenticated");
+
+    const nextName = args.name ?? identity.name ?? "Anonymous";
+    const nextEmail = args.email ?? identity.email ?? null;
+    const nextImageUrl = args.imageUrl ?? identity.pictureUrl ?? null;
+
+    // Require email (since you don't want accounts without email)
+    if (!nextEmail) {
+      throw new Error(
+        "Email is required. Please sign up/sign in with an email account."
+      );
     }
 
-    const user = await ctx.db
+    const existing = await ctx.db
       .query("users")
       .withIndex("by_token", (q) =>
         q.eq("tokenIdentifier", identity.tokenIdentifier)
       )
       .unique();
 
-    const nextName = args.name ?? identity.name ?? "Anonymous";
-    const nextEmail = args.email ?? identity.email ?? undefined;
-    const nextImageUrl = args.imageUrl ?? identity.pictureUrl ?? undefined;
-    
-    if (!nextEmail) {
-  throw new Error(
-    "Email is required. Please sign up/sign in with an email account."
-  );
-}
-
-    if (user !== null) {
+    if (existing) {
       const updates = {};
-      if (user.name !== nextName) updates.name = nextName;
-      if (user.email !== nextEmail) updates.email = nextEmail;
-      if (user.imageUrl !== nextImageUrl) updates.imageUrl = nextImageUrl;
+      if (existing.name !== nextName) updates.name = nextName;
+      if (existing.email !== nextEmail) updates.email = nextEmail;
+      if (existing.imageUrl !== nextImageUrl) updates.imageUrl = nextImageUrl;
 
-      if (Object.keys(updates).length > 0) {
-        await ctx.db.patch(user._id, updates);
+      if (Object.keys(updates).length) {
+        await ctx.db.patch(existing._id, updates);
       }
-      return user._id;
+      return existing._id;
     }
 
     return await ctx.db.insert("users", {
       name: nextName,
-      tokenIdentifier: identity.tokenIdentifier,
       email: nextEmail,
       imageUrl: nextImageUrl,
+      tokenIdentifier: identity.tokenIdentifier,
     });
   },
 });
