@@ -1,57 +1,31 @@
-// test change
 import { useUser } from "@clerk/nextjs";
-import { useConvexAuth } from "convex/react";
+import { useConvexAuth, useMutation } from "convex/react";
 import { useEffect, useState } from "react";
-import { useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 
 export function useStoreUser() {
   const { isLoading, isAuthenticated } = useConvexAuth();
   const { user } = useUser();
-  // When this state is set we know the server
-  // has stored the user.
   const [userId, setUserId] = useState(null);
-  const storeUser = useMutation(api.users.store);
-  // Call the `storeUser` mutation function to store
-  // the current user in the `users` table and return the `Id` value.
-  useEffect(() => {
-    // If the user is not logged in don't do anything
-    if (!isAuthenticated) {
-      return;
-    }
 
-     // NEW: wait until Clerk user is loaded
-  if (!user) {
-    return;
-  }
-    // Store the user in the database.
-    // Recall that `storeUser` gets the user information via the `auth`
-    // object on the server. You don't need to pass anything manually here.
+  const storeUser = useMutation(api.users.store);
+
+  useEffect(() => {
+    // 1) Si no está logueado, no hacemos nada
+    if (!isAuthenticated) return;
+
+    // 2) Si Clerk todavía no cargó el user, no hacemos nada
+    if (!user) return;
+
+    // 3) Si ya lo guardamos, no lo vuelvas a guardar
+    if (userId) return;
+
     async function createUser() {
       const email =
-  user?.primaryEmailAddress?.emailAddress ||
-  user?.emailAddresses?.[0]?.emailAddress;
+        user?.primaryEmailAddress?.emailAddress ||
+        user?.emailAddresses?.[0]?.emailAddress;
 
-const name =
-  user?.fullName ||
-  user?.firstName ||
-  user?.username ||
-  "Anonymous";
+      // Si no hay email, no guardamos (evita "Anonymous" sin email)
+      if (!email) return;
 
-const email = user?.primaryEmailAddress?.emailAddress;
-const imageUrl = user?.imageUrl;
-
-const id = await storeUser({ name, email, imageUrl });
-      setUserId(id);
-    }
-    createUser();
-    return () => setUserId(null);
-    // Make sure the effect reruns if the user logs in with
-    // a different identity
-  }, [isAuthenticated, storeUser, user?.id]);
-  // Combine the local state with the state from context
-  return {
-    isLoading: isLoading || (isAuthenticated && userId === null),
-    isAuthenticated: isAuthenticated && userId !== null,
-  };
-}
+      const
