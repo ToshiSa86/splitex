@@ -17,11 +17,7 @@ import { CategorySelector } from "./category-selector";
 import { SplitSelector } from "./split-selector";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { CalendarIcon } from "lucide-react";
 import { getAllCategories } from "@/lib/expense-categories";
@@ -48,13 +44,11 @@ export function ExpenseForm({ type = "individual", onSuccess }) {
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [splits, setSplits] = useState([]);
 
-  // Mutations and queries
   const { data: currentUser } = useConvexQuery(api.users.getCurrentUser);
-
   const createExpense = useConvexMutation(api.expenses.createExpense);
+
   const categories = getAllCategories();
 
-  // Set up form with validation
   const {
     register,
     handleSubmit,
@@ -69,20 +63,23 @@ export function ExpenseForm({ type = "individual", onSuccess }) {
       amount: "",
       category: "",
       date: new Date(),
-      paidByUserId: currentUser?._id || "",
+      paidByUserId: "",
       splitType: "equal",
       groupId: undefined,
     },
   });
 
-  // Watch for changes
   const amountValue = watch("amount");
   const paidByUserId = watch("paidByUserId");
 
-  // When a user is added or removed, update the participant list
+  // Seed participants with current user for individual expenses
   useEffect(() => {
-    if (participants.length === 0 && currentUser) {
-      // Always add the current user as a participant
+    if (!currentUser) return;
+
+    // Set default payer once currentUser exists
+    setValue("paidByUserId", currentUser._id);
+
+    if (type === "individual" && participants.length === 0) {
       setParticipants([
         {
           id: currentUser._id,
@@ -92,43 +89,54 @@ export function ExpenseForm({ type = "individual", onSuccess }) {
         },
       ]);
     }
-  }, [currentUser, participants]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, type]);
 
-  // Handle form submission
   const onSubmit = async (data) => {
     try {
       const amount = parseFloat(data.amount);
 
-      // Prepare splits in the format expected by the API
+      // Prepare splits
       const formattedSplits = splits.map((split) => ({
         userId: split.userId,
         amount: split.amount,
         paid: split.userId === data.paidByUserId,
       }));
 
-      // Validate that splits add up to the total (with small tolerance)
+      // If SplitSelector didn't populate yet (edge cases), fallback to equal split
+      if (!formattedSplits.length) {
+        const perPerson = participants.length
+          ? amount / participants.length
+          : amount;
+
+        const fallbackSplits = participants.map((p) => ({
+          userId: p.id,
+          amount: perPerson,
+          paid: p.id === data.paidByUserId,
+        }));
+
+        formattedSplits.push(...fallbackSplits);
+      }
+
+      // Validate split total
       const totalSplitAmount = formattedSplits.reduce(
-        (sum, split) => sum + split.amount,
+        (sum, s) => sum + s.amount,
         0
       );
       const tolerance = 0.01;
-
       if (Math.abs(totalSplitAmount - amount) > tolerance) {
-        toast.error(
-          `Split amounts don't add up to the total. Please adjust your splits.`
-        );
+        toast.error("Split amounts don't add up to the total. Adjust splits.");
         return;
       }
 
-      // For 1:1 expenses, set groupId to undefined instead of empty string
-      const groupId = type === "individual" ? undefined : data.groupId;
+      // groupId only for group expenses
+      const groupId = type === "group" ? data.groupId : undefined;
 
-      // Create the expense
       await createExpense.mutate({
         description: data.description,
-        amount: amount,
+        amount,
         category: data.category || "Other",
-        date: data.date.getTime(), // Convert to timestamp
+        date: data.date.getTime(),
         paidByUserId: data.paidByUserId,
         splitType: data.splitType,
         splits: formattedSplits,
@@ -136,16 +144,24 @@ export function ExpenseForm({ type = "individual", onSuccess }) {
       });
 
       toast.success("Expense created successfully!");
-      reset(); // Reset form
+      reset();
 
-      const otherParticipant = participants.find(
-        (p) => p.id !== currentUser._id
-      );
-      const otherUserId = otherParticipant?.id;
-
-      if (onSuccess) onSuccess(type === "individual" ? otherUserId : groupId);
+      // For navigation after submit:
+      // - group: go to group page
+      // - individual: if no other participant, go to YOUR person page (not undefined)
+      if (onSuccess) {
+        if (type === "group") {
+          onSuccess(groupId);
+        } else {
+          const otherParticipant = participants.find(
+            (p) => p.id !== currentUser._id
+          );
+          const targetPersonId = otherParticipant?.id ?? currentUser._id;
+          onSuccess(targetPersonId);
+        }
+      }
     } catch (error) {
-      toast.error("Failed to create expense: " + error.message);
+      toast.error("Failed to create expense: " + (error?.message || error));
     }
   };
 
@@ -190,13 +206,10 @@ export function ExpenseForm({ type = "individual", onSuccess }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="category">Category</Label>
-
             <CategorySelector
               categories={categories || []}
               onChange={(categoryId) => {
-                if (categoryId) {
-                  setValue("category", categoryId);
-                }
+                if (categoryId) setValue("category", categoryId);
               }}
             />
           </div>
@@ -213,11 +226,7 @@ export function ExpenseForm({ type = "individual", onSuccess }) {
                   )}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
-                  {selectedDate ? (
-                    format(selectedDate, "PPP")
-                  ) : (
-                    <span>Pick a date</span>
-                  )}
+                  {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0">
@@ -225,6 +234,7 @@ export function ExpenseForm({ type = "individual", onSuccess }) {
                   mode="single"
                   selected={selectedDate}
                   onSelect={(date) => {
+                    if (!date) return;
                     setSelectedDate(date);
                     setValue("date", date);
                   }}
@@ -241,14 +251,13 @@ export function ExpenseForm({ type = "individual", onSuccess }) {
             <Label>Group</Label>
             <GroupSelector
               onChange={(group) => {
-                // Only update if the group has changed to prevent loops
+                if (!group) return;
+
                 if (!selectedGroup || selectedGroup.id !== group.id) {
                   setSelectedGroup(group);
                   setValue("groupId", group.id);
 
-                  // Update participants with the group members
                   if (group.members && Array.isArray(group.members)) {
-                    // Set the participants once, don't re-set if they're the same
                     setParticipants(group.members);
                   }
                 }
@@ -262,16 +271,17 @@ export function ExpenseForm({ type = "individual", onSuccess }) {
           </div>
         )}
 
-       {/* Participants (for individual expenses) */}
-{type === "individual" && (
-  <div className="space-y-2">
-    <Label>Participants</Label>
-    <ParticipantSelector
-      participants={participants}
-      onParticipantsChange={setParticipants}
-    />
-  </div>
-)}
+        {/* Participants (only for individual) */}
+        {type === "individual" && (
+          <div className="space-y-2">
+            <Label>Participants</Label>
+            <ParticipantSelector
+              participants={participants}
+              onParticipantsChange={setParticipants}
+            />
+            {/* IMPORTANTE: individual permite "solo yo", así que NO mostramos warning */}
+          </div>
+        )}
 
         {/* Paid by selector */}
         <div className="space-y-2">
@@ -288,24 +298,20 @@ export function ExpenseForm({ type = "individual", onSuccess }) {
             ))}
           </select>
           {errors.paidByUserId && (
-            <p className="text-sm text-red-500">
-              {errors.paidByUserId.message}
-            </p>
+            <p className="text-sm text-red-500">{errors.paidByUserId.message}</p>
           )}
         </div>
 
         {/* Split type */}
         <div className="space-y-2">
           <Label>Split type</Label>
-          <Tabs
-            defaultValue="equal"
-            onValueChange={(value) => setValue("splitType", value)}
-          >
+          <Tabs defaultValue="equal" onValueChange={(v) => setValue("splitType", v)}>
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="equal">Equal</TabsTrigger>
               <TabsTrigger value="percentage">Percentage</TabsTrigger>
               <TabsTrigger value="exact">Exact Amounts</TabsTrigger>
             </TabsList>
+
             <TabsContent value="equal" className="pt-4">
               <p className="text-sm text-muted-foreground">
                 Split equally among all participants
@@ -315,31 +321,29 @@ export function ExpenseForm({ type = "individual", onSuccess }) {
                 amount={parseFloat(amountValue) || 0}
                 participants={participants}
                 paidByUserId={paidByUserId}
-                onSplitsChange={setSplits} // Use setSplits directly
+                onSplitsChange={setSplits}
               />
             </TabsContent>
+
             <TabsContent value="percentage" className="pt-4">
-              <p className="text-sm text-muted-foreground">
-                Split by percentage
-              </p>
+              <p className="text-sm text-muted-foreground">Split by percentage</p>
               <SplitSelector
                 type="percentage"
                 amount={parseFloat(amountValue) || 0}
                 participants={participants}
                 paidByUserId={paidByUserId}
-                onSplitsChange={setSplits} // Use setSplits directly
+                onSplitsChange={setSplits}
               />
             </TabsContent>
+
             <TabsContent value="exact" className="pt-4">
-              <p className="text-sm text-muted-foreground">
-                Enter exact amounts
-              </p>
+              <p className="text-sm text-muted-foreground">Enter exact amounts</p>
               <SplitSelector
                 type="exact"
                 amount={parseFloat(amountValue) || 0}
                 participants={participants}
                 paidByUserId={paidByUserId}
-                onSplitsChange={setSplits} // Use setSplits directly
+                onSplitsChange={setSplits}
               />
             </TabsContent>
           </Tabs>
@@ -349,11 +353,7 @@ export function ExpenseForm({ type = "individual", onSuccess }) {
       <div className="flex justify-end">
         <Button
           type="submit"
-         disabled={
-  {isSubmitting ? "Creating..." : "CREATE EXPENSE (TEST)"}
-
-  (type === "group" && participants.length <= 1)
-}
+          disabled={isSubmitting || (type === "group" && participants.length <= 1)}
         >
           {isSubmitting ? "Creating..." : "Create Expense"}
         </Button>
