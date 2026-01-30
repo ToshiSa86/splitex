@@ -350,14 +350,16 @@ export function ExpenseForm({ type = "individual", onSuccess }) {
         </div>
       </div>
 
-      <div className="flex justify-end">
-        <Button
-          type="submit"
-          disabled={isSubmitting || (type === "group" && participants.length <= 1)}
-        >
-          {isSubmitting ? "Creating..." : "Create Expense"}
-        </Button>
-      </div>
+      <<div className="flex justify-end">
+  <Button
+    type="submit"
+    disabled={isSubmitting || (type === "group" && participants.length <= 1)}
+  >
+    {isSubmitting ? "Creating..." : "Create Expense"}
+    {/* submit */}
+  </Button>
+</div>
+
     </form>
   );
 }
