@@ -262,21 +262,16 @@ export function ExpenseForm({ type = "individual", onSuccess }) {
           </div>
         )}
 
-        {/* Participants (for individual expenses) */}
-        {type === "individual" && (
-          <div className="space-y-2">
-            <Label>Participants</Label>
-            <ParticipantSelector
-              participants={participants}
-              onParticipantsChange={setParticipants}
-            />
-            {participants.length <= 1 && (
-              <p className="text-xs text-amber-600">
-                Please add at least one other participant
-              </p>
-            )}
-          </div>
-        )}
+       {/* Participants (for individual expenses) */}
+{type === "individual" && (
+  <div className="space-y-2">
+    <Label>Participants</Label>
+    <ParticipantSelector
+      participants={participants}
+      onParticipantsChange={setParticipants}
+    />
+  </div>
+)}
 
         {/* Paid by selector */}
         <div className="space-y-2">
@@ -354,7 +349,11 @@ export function ExpenseForm({ type = "individual", onSuccess }) {
       <div className="flex justify-end">
         <Button
           type="submit"
-          disabled={isSubmitting || participants.length <= 1}
+         disabled={
+  {isSubmitting ? "Creating..." : "CREATE EXPENSE (TEST)"}
+
+  (type === "group" && participants.length <= 1)
+}
         >
           {isSubmitting ? "Creating..." : "Create Expense"}
         </Button>
