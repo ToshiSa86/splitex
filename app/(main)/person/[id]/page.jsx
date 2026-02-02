@@ -37,6 +37,9 @@ export default function PersonExpensesPage() {
   const settlements = data?.settlements || [];
   const balance = data?.balance || 0;
 
+const otherUserKey = otherUser?._id ?? otherUser?.id;
+const userLookupMap = otherUserKey ? { [otherUserKey]: otherUser } : {};
+
   return (
     <div className="container mx-auto py-6 max-w-4xl">
       <div className="mb-6">
@@ -132,15 +135,15 @@ export default function PersonExpensesPage() {
             expenses={expenses}
             showOtherPerson={false}
             otherPersonId={params.id}
-            userLookupMap={{ [otherUser.id]: otherUser }}
+            userLookupMap={userLookupMap}
           />
         </TabsContent>
 
         <TabsContent value="settlements" className="space-y-4">
           <SettlementList
-            settlements={settlements}
-            userLookupMap={{ [otherUser.id]: otherUser }}
-          />
+  settlements={settlements}
+  userLookupMap={otherUser ? { [(otherUser._id ?? otherUser.id)]: otherUser } : {}}
+/>
         </TabsContent>
       </Tabs>
     </div>

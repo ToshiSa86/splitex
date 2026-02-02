@@ -13,8 +13,9 @@ export const store = mutation({
     if (!identity) throw new Error("Not authenticated");
 
     const nextName = args.name ?? identity.name ?? "Anonymous";
-    const nextEmail = args.email ?? identity.email ?? null;
-    const nextImageUrl = args.imageUrl ?? identity.pictureUrl ?? null;
+    const nextEmail = args.email ?? identity.emailAddress ?? undefined;
+    const nextImageUrl = args.imageUrl ?? identity.pictureUrl ?? undefined;
+
 
     // Require email (since you don't want accounts without email)
     if (!nextEmail) {
@@ -30,17 +31,24 @@ export const store = mutation({
       )
       .unique();
 
-    if (existing) {
-      const updates = {};
-      if (existing.name !== nextName) updates.name = nextName;
-      if (existing.email !== nextEmail) updates.email = nextEmail;
-      if (existing.imageUrl !== nextImageUrl) updates.imageUrl = nextImageUrl;
+ if (existing) {
+  const updates = {};
+  if (existing.name !== nextName) updates.name = nextName;
 
-      if (Object.keys(updates).length) {
-        await ctx.db.patch(existing._id, updates);
-      }
-      return existing._id;
-    }
+  if (nextEmail !== undefined && existing.email !== nextEmail) {
+    updates.email = nextEmail;
+  }
+
+  if (nextImageUrl !== undefined && existing.imageUrl !== nextImageUrl) {
+    updates.imageUrl = nextImageUrl;
+  }
+
+  if (Object.keys(updates).length) {
+    await ctx.db.patch(existing._id, updates);
+  }
+  return existing._id;
+}
+
 
     return await ctx.db.insert("users", {
       name: nextName,
@@ -66,13 +74,12 @@ export const getCurrentUser = query({
       )
       .first();
 
-    if (!user) {
-      throw new Error("User not found");
-    }
+    if (!user) return null;
 
     return user;
   },
 });
+
 
 // Search users by name or email (for adding participants)
 export const searchUsers = query({
